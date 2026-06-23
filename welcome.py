@@ -1,15 +1,29 @@
 import discord
+import json
+import os
 from discord.ext import commands, tasks
 from datetime import datetime, timezone
-from utils import storage
 
+# Shared local data file configuration paths
+SETTINGS_FILE = "guild_settings.json"
+MESSAGE_COUNTS_FILE = "message_counts.json"
 
 def get_settings():
-    return storage.load("guild_settings", {})
+    if not os.path.exists(SETTINGS_FILE):
+        return {}
+    try:
+        with open(SETTINGS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 def save_settings(data):
-    storage.save("guild_settings", data)
+    try:
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 
 def get_guild(data, guild_id):
@@ -20,7 +34,13 @@ def get_guild(data, guild_id):
 
 
 def get_message_counts():
-    return storage.load("message_counts", {})
+    if not os.path.exists(MESSAGE_COUNTS_FILE):
+        return {}
+    try:
+        with open(MESSAGE_COUNTS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 class Application(commands.Cog):
