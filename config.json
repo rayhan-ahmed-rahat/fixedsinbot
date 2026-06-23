@@ -1,0 +1,46 @@
+{
+  "prefix": "!",
+  "bot_name": "𝐬𝐢𝐧𝐢𝐬𝐦",
+  "creator_name": "YourNameHere",
+  "owner_ids": [
+    123456789012345678
+  ],
+  "swear_words": [
+    "fuck",
+    "fucking",
+    "fucker",
+    "motherfucker",
+    "shit",
+    "bullshit",
+    "bitch",
+    "bastard",
+    "asshole",
+    "dumbass",
+    "jackass",
+    "dick",
+    "dickhead",
+    "pussy",
+    "cunt",
+    "cock",
+    "whore",
+    "slut",
+    "nigger",
+    "nigga",
+    "faggot",
+    "fag",
+    "retard",
+    "retarded"
+  ],
+  "application_required_days": 30,
+  "application_required_messages": 500,
+  "key_uses": 5,
+  "boost_perks": {
+    "1": 5,
+    "2": 12,
+    "3": 15,
+    "5": 100
+  },
+  "welcome_gif": "https://media.tenor.com/ZcQz_Bymg5cAAAAd/welcome.gif",
+  "goodbye_gif": "https://media.tenor.com/EyAK76lE2aIAAAAd/goodbye-discord.gif",
+  "antinuke_warning_dm": "yo if you try that again you will be reported"
+}
