@@ -1,14 +1,26 @@
 import discord
+import json
+import os
 from discord.ext import commands
-from utils import storage
 
+# File path to store data locally without needing a 'utils' library
+WHITELIST_FILE = "whitelist.json"
 
 def get_whitelist():
-    return storage.load("whitelist", {"users": []})
-
+    if not os.path.exists(WHITELIST_FILE):
+        return {"users": []}
+    try:
+        with open(WHITELIST_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {"users": []}
 
 def save_whitelist(data):
-    storage.save("whitelist", data)
+    try:
+        with open(WHITELIST_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 
 def is_owner(bot, user_id):
