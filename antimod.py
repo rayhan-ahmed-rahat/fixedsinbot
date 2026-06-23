@@ -1,11 +1,19 @@
 import discord
+import json
+import os
 from discord.ext import commands
-from utils import storage
 
+# File path to store data locally without needing a 'utils' library
+SETTINGS_FILE = "guild_settings.json"
 
 def get_settings():
-    return storage.load("guild_settings", {})
-
+    if not os.path.exists(SETTINGS_FILE):
+        return {}
+    try:
+        with open(SETTINGS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 def get_guild(data, guild_id):
     gid = str(guild_id)
