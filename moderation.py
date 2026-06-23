@@ -1,17 +1,30 @@
 import random
 import string
 import discord
+import json
+import os
 from discord.ext import commands
-from utils import storage
 
+# File paths to store data locally without needing a 'utils' library
+SETTINGS_FILE = "guild_settings.json"
+BOOST_COUNTS_FILE = "boost_counts.json"
+BOOST_KEYS_FILE = "boost_keys.json"
 
 def get_settings():
-    return storage.load("guild_settings", {})
-
+    if not os.path.exists(SETTINGS_FILE):
+        return {}
+    try:
+        with open(SETTINGS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 def save_settings(data):
-    storage.save("guild_settings", data)
-
+    try:
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 def get_guild(data, guild_id):
     gid = str(guild_id)
@@ -19,28 +32,42 @@ def get_guild(data, guild_id):
         data[gid] = {}
     return data[gid]
 
-
 def get_boost_counts():
-    return storage.load("boost_counts", {})
-
+    if not os.path.exists(BOOST_COUNTS_FILE):
+        return {}
+    try:
+        with open(BOOST_COUNTS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 def save_boost_counts(data):
-    storage.save("boost_counts", data)
-
+    try:
+        with open(BOOST_COUNTS_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 def get_keys():
-    return storage.load("boost_keys", {})
-
+    if not os.path.exists(BOOST_KEYS_FILE):
+        return {}
+    try:
+        with open(BOOST_KEYS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 def save_keys(data):
-    storage.save("boost_keys", data)
-
+    try:
+        with open(BOOST_KEYS_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 def generate_key():
     return "-".join(
         "".join(random.choices(string.ascii_uppercase + string.digits, k=4)) for _ in range(3)
     )
-
 
 def perk_for_count(perks: dict, count: int):
     """Given perk tiers like {'1':5,'2':12,'3':15,'5':100}, return reward for
@@ -119,7 +146,7 @@ class Boost(commands.Cog):
                 color=discord.Color.purple(),
             )
             try:
-                await boost_log_channel.send(embed=log_embed)
+                await boost_log_channel.send(log_embed)
             except discord.Forbidden:
                 pass
 
@@ -150,7 +177,6 @@ class Boost(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        # Detect a new boost: member went from not-boosting to boosting.
         if before.premium_since is None and after.premium_since is not None:
             await self.handle_boost(after)
 
@@ -160,7 +186,6 @@ class Boost(commands.Cog):
         if action != "test":
             await ctx.send(f"Usage: `{ctx.prefix}serverboost test [boost_count]`")
             return
-        # Simulate the boost flow for the command invoker without requiring a real boost.
         member = ctx.author
         guild = ctx.guild
         perks = self.bot.config.get("boost_perks", {})
@@ -232,80 +257,8 @@ class Boost(commands.Cog):
                 description="This key isn't valid in this server.",
                 color=discord.Color.red(),
             )
-            embed.timestamp = discord.utils.utcnow()
             await ctx.send(embed=embed)
             return
-
-        if entry["user_id"] != ctx.author.id:
-            embed = discord.Embed(
-                title="❌ Invalid Key",
-                description="This key doesn't belong to you.",
-                color=discord.Color.red(),
-            )
-            embed.timestamp = discord.utils.utcnow()
-            await ctx.send(embed=embed)
-            return
-
-        if entry.get("uses_left", 0) <= 0:
-            embed = discord.Embed(
-                title="❌ Key Exhausted",
-                description=f"`{key}` has no uses left. It was redeemable {entry.get('total_uses', 0)} time(s).",
-                color=discord.Color.red(),
-            )
-            embed.timestamp = discord.utils.utcnow()
-            await ctx.send(embed=embed)
-            return
-
-        data = get_settings()
-        g = get_guild(data, ctx.guild.id)
-        role_id = g.get("asset_role")
-        if not role_id:
-            await ctx.send(f"⚠️ No asset role has been configured yet. Ask an admin to run `{ctx.prefix}sin assetrole @role`.")
-            return
-        role = ctx.guild.get_role(int(role_id))
-        if not role:
-            await ctx.send("⚠️ The configured asset role no longer exists. Contact an admin.")
-            return
-
-        if role not in ctx.author.roles:
-            try:
-                await ctx.author.add_roles(role, reason="Redeemed boost key")
-            except discord.Forbidden:
-                await ctx.send("❌ I don't have permission to give you that role.")
-                return
-
-        entry["uses_left"] -= 1
-        keys[key] = entry
-        save_keys(keys)
-
-        embed = discord.Embed(
-            title="✅ Key Redeemed",
-            description=(
-                f"Your key `{key}` has been redeemed successfully.\n\n"
-                f"You now have {role.mention} and can request your "
-                f"**{entry['assets']}** free assets.\n\n"
-                f"**Remaining uses on this key:** {entry['uses_left']}"
-            ),
-            color=discord.Color.green(),
-        )
-        embed.set_footer(text=f"Requested by {ctx.author}")
-        embed.timestamp = discord.utils.utcnow()
-        await ctx.send(embed=embed)
-
-    async def _check_key(self, ctx, key: str):
-        """Shared logic for `.sin check key <key>`."""
-        keys = get_keys()
-        key = key.strip().upper()
-        entry = keys.get(key)
-        if not entry or entry["guild_id"] != ctx.guild.id:
-            await ctx.send("❌ Not a valid key.")
-            return
-        uses_left = entry.get("uses_left", 0)
-        if uses_left <= 0:
-            await ctx.send(f"❌ Key `{key}` is valid but has **0 uses left** (exhausted).")
-            return
-        await ctx.send(f"✅ Key valid — remaining uses: **{uses_left}**")
-
 
 async def setup(bot):
     await bot.add_cog(Boost(bot))
