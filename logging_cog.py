@@ -1,15 +1,27 @@
 import re
 import discord
+import json
+import os
 from discord.ext import commands
-from utils import storage
 
+# File path to store message data locally without needing a 'utils' library
+MESSAGE_COUNTS_FILE = "message_counts.json"
 
 def get_message_counts():
-    return storage.load("message_counts", {})
-
+    if not os.path.exists(MESSAGE_COUNTS_FILE):
+        return {}
+    try:
+        with open(MESSAGE_COUNTS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 def save_message_counts(data):
-    storage.save("message_counts", data)
+    try:
+        with open(MESSAGE_COUNTS_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 
 def build_word_pattern(words):
