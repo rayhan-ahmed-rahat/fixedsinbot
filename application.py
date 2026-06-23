@@ -1,6 +1,11 @@
 import discord
+import json
+import os
 from discord.ext import commands
-from utils import storage
+
+# Shared local data file configuration paths
+SETTINGS_FILE = "guild_settings.json"
+BOOST_KEYS_FILE = "boost_keys.json"
 
 COMMAND_INFO = {
     "ban": "Bans a member from the server.",
@@ -34,11 +39,21 @@ COMMAND_INFO = {
 
 
 def get_settings():
-    return storage.load("guild_settings", {})
+    if not os.path.exists(SETTINGS_FILE):
+        return {}
+    try:
+        with open(SETTINGS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 def save_settings(data):
-    storage.save("guild_settings", data)
+    try:
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 
 def get_guild(data, guild_id):
@@ -46,6 +61,16 @@ def get_guild(data, guild_id):
     if gid not in data:
         data[gid] = {}
     return data[gid]
+
+
+def get_keys():
+    if not os.path.exists(BOOST_KEYS_FILE):
+        return {}
+    try:
+        with open(BOOST_KEYS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 class Sin(commands.Cog):
@@ -186,88 +211,32 @@ class Sin(commands.Cog):
     async def antinuke_logs(self, ctx, channel: discord.TextChannel):
         data = get_settings()
         g = get_guild(data, ctx.guild.id)
-        g["antinuke_log_channel"] = channel.id
+        g["antinuke_log_channel"] = str(channel.id)
         save_settings(data)
-        await ctx.send(f"✅ Antinuke alerts will now be sent to {channel.mention}.")
+        await ctx.send(f"✅ Antinuke log channel has been set to {channel.mention}.")
 
-    @sin.command(name="staffrole")
-    @commands.has_permissions(administrator=True)
-    async def staffrole(self, ctx, role: discord.Role):
-        data = get_settings()
-        g = get_guild(data, ctx.guild.id)
-        g["staff_role"] = role.id
-        save_settings(data)
-        await ctx.send(f"✅ {role.mention} is now the Staff Team — they (and admins) can ping roles / @everyone / @here. Everyone else is blocked.")
 
-    @sin.command(name="logs")
-    @commands.has_permissions(administrator=True)
-    async def event_logs(self, ctx, channel: discord.TextChannel):
-        data = get_settings()
-        g = get_guild(data, ctx.guild.id)
-        g["event_log_channel"] = channel.id
-        save_settings(data)
-        await ctx.send(f"✅ Full server activity logs will now be sent to {channel.mention}.")
+    # ---------------- check key snippet helper ----------------
 
-    @sin.command(name="welcomechannel")
-    @commands.has_permissions(administrator=True)
-    async def welcomechannel(self, ctx, channel: discord.TextChannel):
-        data = get_settings()
-        g = get_guild(data, ctx.guild.id)
-        g["welcome_channel"] = channel.id
-        save_settings(data)
-        await ctx.send(f"✅ Welcome messages will now be posted in {channel.mention}.")
-
-    @sin.command(name="byechannel")
-    @commands.has_permissions(administrator=True)
-    async def byechannel(self, ctx, channel: discord.TextChannel):
-        data = get_settings()
-        g = get_guild(data, ctx.guild.id)
-        g["goodbye_channel"] = channel.id
-        save_settings(data)
-        await ctx.send(f"✅ Goodbye messages will now be posted in {channel.mention}.")
-
-    # ---------------- boost settings ----------------
-
-    @sin.command(name="boostchannel")
-    @commands.has_permissions(administrator=True)
-    async def boostchannel(self, ctx, channel: discord.TextChannel):
-        data = get_settings()
-        g = get_guild(data, ctx.guild.id)
-        g["boost_channel"] = channel.id
-        save_settings(data)
-        await ctx.send(f"✅ Boost announcements will be posted in {channel.mention}.")
-
-    @sin.command(name="boostlogs")
-    @commands.has_permissions(administrator=True)
-    async def boostlogs(self, ctx, channel: discord.TextChannel):
-        data = get_settings()
-        g = get_guild(data, ctx.guild.id)
-        g["boost_log_channel"] = channel.id
-        save_settings(data)
-        await ctx.send(f"✅ Boost keys will be logged in {channel.mention}.")
-
-    @sin.command(name="assetrole")
-    @commands.has_permissions(administrator=True)
-    async def assetrole(self, ctx, role: discord.Role):
-        data = get_settings()
-        g = get_guild(data, ctx.guild.id)
-        g["asset_role"] = role.id
-        save_settings(data)
-        await ctx.send(f"✅ Members who redeem a boost key will now receive {role.mention}.")
-
-    # ---------------- key check ----------------
-
-    @sin.group(name="check", invoke_without_command=True)
-    async def check(self, ctx):
-        await ctx.send(f"Use `{ctx.prefix}sin check key <key>`.")
-
-    @check.command(name="key")
-    async def check_key(self, ctx, key: str):
-        boost_cog = self.bot.get_cog("Boost")
-        if not boost_cog:
-            await ctx.send("⚠️ Boost system isn't loaded.")
+    @sin.command(name="check")
+    async def check_key(self, ctx, sub_action: str, key: str):
+        if sub_action.lower() != "key":
+            await ctx.send(f"Usage: `{ctx.prefix}sin check key <key_code>`")
             return
-        await boost_cog._check_key(ctx, key)
+        
+        keys = get_keys()
+        key = key.strip().upper()
+        entry = keys.get(key)
+        
+        if not entry:
+            await ctx.send("❌ Key not found or has already expired.")
+            return
+            
+        await ctx.send(
+            f"ℹ️ **Key Details:** `{key}`\n"
+            f"• Remaining Uses: **{entry.get('uses_left', 0)} / {entry.get('total_uses', 5)}**\n"
+            f"• Associated Assets: **{entry.get('assets', 0)}**"
+        )
 
 
 async def setup(bot):
