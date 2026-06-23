@@ -1,19 +1,31 @@
 import time
 import discord
+import json
+import os
 from discord.ext import commands
-from utils import storage
 
 THRESHOLD = 3        # number of nuke-style actions
 WINDOW_SECONDS = 10   # within this many seconds triggers an instant ban
 
+# File paths to store data locally without needing a 'utils' library
+SETTINGS_FILE = "guild_settings.json"
+UNBAN_LOG_FILE = "false_ban_log.json"
 
 def get_settings():
-    return storage.load("guild_settings", {})
-
+    if not os.path.exists(SETTINGS_FILE):
+        return {}
+    try:
+        with open(SETTINGS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 def save_settings(data):
-    storage.save("guild_settings", data)
-
+    try:
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 def get_guild(data, guild_id):
     gid = str(guild_id)
@@ -21,13 +33,21 @@ def get_guild(data, guild_id):
         data[gid] = {}
     return data[gid]
 
-
 def get_unban_log():
-    return storage.load("false_ban_log", {"events": []})
-
+    if not os.path.exists(UNBAN_LOG_FILE):
+        return {"events": []}
+    try:
+        with open(UNBAN_LOG_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {"events": []}
 
 def save_unban_log(data):
-    storage.save("false_ban_log", data)
+    try:
+        with open(UNBAN_LOG_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception:
+        pass
 
 
 class FalseBanView(discord.ui.View):
@@ -208,95 +228,8 @@ class Antinuke(commands.Cog):
             for member in staff_role.members:
                 try:
                     await member.send(embed=alert_embed)
-                except (discord.Forbidden, discord.HTTPException):
-                    continue
-
-        # Post to alert channel with the False Ban button
-        channel = await self.get_log_channel(guild)
-        if channel:
-            view = FalseBanView(self.bot, guild.id, actor.id, str(actor))
-            try:
-                await channel.send(embed=alert_embed, view=view)
-            except discord.Forbidden:
-                pass
-
-    # ---------- Event listeners: nuke-style mass actions ----------
-
-    @commands.Cog.listener()
-    async def on_guild_channel_delete(self, channel):
-        guild = channel.guild
-        if not self.is_enabled(guild.id):
-            return
-        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_delete):
-            await self.record_and_check(guild, entry.user, "channel deletion")
-            break
-
-    @commands.Cog.listener()
-    async def on_guild_role_delete(self, role):
-        guild = role.guild
-        if not self.is_enabled(guild.id):
-            return
-        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.role_delete):
-            await self.record_and_check(guild, entry.user, "role deletion")
-            break
-
-    @commands.Cog.listener()
-    async def on_member_ban(self, guild, user):
-        if not self.is_enabled(guild.id):
-            return
-        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
-            await self.record_and_check(guild, entry.user, "member bans")
-            break
-
-    @commands.Cog.listener()
-    async def on_member_remove(self, member):
-        guild = member.guild
-        if not self.is_enabled(guild.id):
-            return
-        async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.kick):
-            if entry.target and entry.target.id == member.id:
-                await self.record_and_check(guild, entry.user, "member kicks")
-            break
-
-    # ---------- Role-ping permission gate (separate from nuke detection) ----------
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot or not message.guild:
-            return
-        if not message.role_mentions and not message.mention_everyone:
-            return
-
-        staff_role = self.get_staff_role(message.guild)
-        is_staff = staff_role in message.author.roles if staff_role else False
-        is_admin = message.author.guild_permissions.administrator
-
-        if is_staff or is_admin:
-            return  # Staff Team + admins are allowed to ping roles / everyone
-
-        try:
-            await message.delete()
-        except (discord.Forbidden, discord.NotFound):
-            pass
-
-        # If antinuke is enabled, repeated attempts within the window escalate
-        # to an instant ban (covers @everyone nuke spam). Check this FIRST so we
-        # don't send a "only staff can ping" warning right before/after banning
-        # the same user for the same message — that was sending two messages
-        # for one offense.
-        banned = False
-        if self.is_enabled(message.guild.id):
-            banned = await self.record_and_check(message.guild, message.author, "role/everyone pings")
-
-        if not banned:
-            try:
-                await message.channel.send(
-                    f"{message.author.mention} ❌ Only the Staff Team can ping roles or @everyone/@here.",
-                    delete_after=8,
-                )
-            except discord.Forbidden:
-                pass
-
+                except Exception:
+                    pass
 
 async def setup(bot):
     await bot.add_cog(Antinuke(bot))
